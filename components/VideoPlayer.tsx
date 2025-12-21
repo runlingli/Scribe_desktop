@@ -1,0 +1,201 @@
+
+import React, { useRef, useEffect, useState } from 'react';
+import { SubtitleTrack } from '../types';
+import { Gauge, Captions, CaptionsOff, X, Check, Type } from 'lucide-react';
+
+interface VideoPlayerProps {
+  url: string;
+  title: string;
+  onTimeUpdate: (time: number) => void;
+  onDurationChange: (duration: number) => void;
+  currentTime: number;
+  tracks: SubtitleTrack[];
+  activeTrackIds: string[];
+  onTrackChange: (ids: string[]) => void;
+  playbackRate: number;
+  subtitleSize: number;
+  showSubtitles: boolean;
+  onToggleSubtitles: () => void;
+  onSpeedChange: (rate: number) => void;
+  onSizeChange: (size: number) => void;
+  onClose: () => void;
+}
+
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
+  url, 
+  title,
+  onTimeUpdate, 
+  onDurationChange, 
+  currentTime,
+  tracks,
+  activeTrackIds,
+  onTrackChange,
+  playbackRate,
+  subtitleSize,
+  showSubtitles,
+  onToggleSubtitles,
+  onSpeedChange,
+  onSizeChange,
+  onClose
+}) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [showSizeMenu, setShowSizeMenu] = useState(false);
+  const [showTrackMenu, setShowTrackMenu] = useState(false);
+
+  useEffect(() => {
+    if (videoRef.current && Math.abs(videoRef.current.currentTime - currentTime) > 0.5) {
+      videoRef.current.currentTime = currentTime;
+    }
+  }, [currentTime]);
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = playbackRate;
+  }, [playbackRate]);
+
+  const displayedTracks = activeTrackIds
+    .map(id => tracks.find(t => t.id === id))
+    .filter(Boolean) as SubtitleTrack[];
+
+  const activeLines = displayedTracks.map(track => 
+    track.lines.find(line => currentTime >= line.startTime && currentTime <= line.endTime)
+  );
+
+  const toggleTrack = (id: string) => {
+    const isSelected = activeTrackIds.includes(id);
+    let newIds: string[];
+    if (isSelected) {
+      newIds = activeTrackIds.filter(i => i !== id);
+    } else {
+      newIds = [...activeTrackIds, id].slice(-2);
+    }
+    onTrackChange(newIds);
+  };
+
+  const speeds = [0.5, 1, 1.25, 1.5, 2, 2.5, 3];
+  const sizes = [
+    { label: 'Tiny', val: 0.6 },
+    { label: 'Small', val: 0.8 },
+    { label: 'Normal', val: 1.0 },
+    { label: 'Large', val: 1.25 },
+    { label: 'Huge', val: 1.5 }
+  ];
+
+  return (
+    <div 
+      className="relative w-full h-full flex flex-col bg-black group/player overflow-hidden"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => { setIsHovered(false); setShowSpeedMenu(false); setShowSizeMenu(false); setShowTrackMenu(false); }}
+    >
+      <video 
+        ref={videoRef}
+        src={url}
+        className="w-full h-full object-contain outline-none cursor-pointer"
+        controls
+        onTimeUpdate={(e) => onTimeUpdate(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => onDurationChange(e.currentTarget.duration)}
+      />
+      
+      <div className={`absolute top-0 left-0 right-0 p-6 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 pointer-events-none flex justify-between items-start z-50 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+        <div className="flex-1 pr-12">
+          <h2 className="text-sm font-semibold text-white/90 truncate drop-shadow-md">{title}</h2>
+        </div>
+        <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="p-1.5 hover:bg-white/20 rounded-lg pointer-events-auto transition-colors">
+          <X className="w-4 h-4 text-white/70" />
+        </button>
+      </div>
+
+      <div className={`absolute bottom-10 left-40 flex items-center justify-end gap-2 transition-opacity duration-300 z-50 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Size Menu */}
+        <div className="relative">
+          <button onClick={() => { setShowSizeMenu(!showSizeMenu); setShowSpeedMenu(false); setShowTrackMenu(false); }} className="flex items-center gap-1.5 bg-black/80 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/10 text-white/90 hover:bg-slate-900 transition-all shadow-xl">
+            <Type className="w-3.5 h-3.5 text-blue-400" />
+          </button>
+          {showSizeMenu && (
+            <div className="absolute bottom-full mb-3 right-0 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[100px] py-1 animate-in fade-in slide-in-from-bottom-2">
+              {sizes.map(s => (
+                <button key={s.val} onClick={() => { onSizeChange(s.val); setShowSizeMenu(false); }} className={`w-full text-left px-4 py-2 text-[11px] font-bold transition-colors ${subtitleSize === s.val ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Speed Menu */}
+        <div className="relative">
+          <button onClick={() => { setShowSpeedMenu(!showSpeedMenu); setShowSizeMenu(false); setShowTrackMenu(false); }} className="flex items-center gap-1.5 bg-black/80 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/10 text-white/90 hover:bg-slate-900 transition-all shadow-xl">
+            <span className="text-[11px] font-bold min-w-[24px] uppercase tracking-tighter">{playbackRate}x</span>
+          </button>
+          {showSpeedMenu && (
+            <div className="absolute bottom-full mb-3 right-0 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[80px] py-1 animate-in fade-in slide-in-from-bottom-2">
+              {speeds.map(s => (
+                <button key={s} onClick={() => { onSpeedChange(s); setShowSpeedMenu(false); }} className={`w-full text-left px-4 py-2 text-[11px] font-bold transition-colors ${playbackRate === s ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>
+                  {s}x
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="relative">
+          <button onClick={() => { setShowTrackMenu(!showTrackMenu); setShowSpeedMenu(false); setShowSizeMenu(false); }} className={`p-2 rounded-xl backdrop-blur-xl border border-white/10 transition-all ${activeTrackIds.length > 0 ? 'bg-blue-600/90 text-white shadow-xl' : 'bg-black/80 text-white/60 hover:text-white'}`}>
+            <Captions className="w-4 h-4" />
+          </button>
+          {showTrackMenu && (
+            <div className="absolute bottom-full mb-3 right-0 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[140px] py-1 animate-in fade-in slide-in-from-bottom-2">
+              <div className="px-3 py-1.5 border-b border-white/5 mb-1">
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Video Tracks</p>
+              </div>
+              {tracks.length === 0 ? (
+                <p className="px-4 py-2 text-[10px] text-slate-500 italic">No subtitles found</p>
+              ) : (
+                tracks.map(t => {
+                  const rank = activeTrackIds.indexOf(t.id);
+                  return (
+                    <button key={t.id} onClick={() => toggleTrack(t.id)} className={`w-full text-left px-4 py-2 text-[11px] font-medium flex items-center justify-between transition-colors ${rank !== -1 ? 'text-blue-400 bg-blue-500/5' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>
+                      <div className="flex items-center gap-1.5">
+                        {t.label}
+                        {rank !== -1 && (
+                          <span className={`text-[8px] px-1 rounded-sm ${rank === 0 ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                            {rank === 0 ? 'P' : 'S'}
+                          </span>
+                        )}
+                      </div>
+                      {rank !== -1 && <Check className="w-3 h-3" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showSubtitles && activeLines.some(l => l !== undefined) && (
+        <div className="absolute bottom-[12%] left-0 right-0 flex flex-col items-center justify-end pointer-events-none px-9 transition-all z-20">
+          <div className="flex flex-col items-center max-w-[90%] rounded-xl bg-black/40 border border-white/5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {activeLines.map((line, idx) => {
+              if (!line) return null;
+              const primarySize = 24 * subtitleSize;
+              const secondarySize = 20 * subtitleSize;
+              return (
+                <div key={idx} className="px-3 py-0.5">
+                  <p 
+                    className={`leading-tight select-none text-white font-medium text-center tracking-wide`}
+                    style={{ fontSize: idx === 0 ? `${primarySize}px` : `${secondarySize}px`, opacity: idx === 0 ? 1 : 0.9 }}
+                  >
+                    {line.text}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default VideoPlayer;
