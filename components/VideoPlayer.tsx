@@ -1,7 +1,8 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { SubtitleTrack } from '../types';
+import { SubtitleTrack, UILanguage } from '../types';
 import { Gauge, Captions, CaptionsOff, X, Check, Type } from 'lucide-react';
+import { translations } from '../utils/translations';
 
 interface VideoPlayerProps {
   url: string;
@@ -19,6 +20,7 @@ interface VideoPlayerProps {
   onSpeedChange: (rate: number) => void;
   onSizeChange: (size: number) => void;
   onClose: () => void;
+  uiLanguage: UILanguage;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
@@ -36,13 +38,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onToggleSubtitles,
   onSpeedChange,
   onSizeChange,
-  onClose
+  onClose,
+  uiLanguage
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showTrackMenu, setShowTrackMenu] = useState(false);
+
+  const t = translations[uiLanguage];
 
   useEffect(() => {
     if (videoRef.current && Math.abs(videoRef.current.currentTime - currentTime) > 0.5) {
@@ -75,11 +80,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const speeds = [0.5, 1, 1.25, 1.5, 2, 2.5, 3];
   const sizes = [
-    { label: 'Tiny', val: 0.6 },
-    { label: 'Small', val: 0.8 },
-    { label: 'Normal', val: 1.0 },
-    { label: 'Large', val: 1.25 },
-    { label: 'Huge', val: 1.5 }
+    { label: t.tiny, val: 0.6 },
+    { label: t.small, val: 0.8 },
+    { label: t.normal, val: 1.0 },
+    { label: t.large, val: 1.25 },
+    { label: t.huge, val: 1.5 }
   ];
 
   return (
@@ -106,10 +111,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </button>
       </div>
 
-      <div className={`absolute bottom-10 left-40 flex items-center justify-end gap-2 transition-opacity duration-300 z-50 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`absolute bottom-9 left-40 flex items-center justify-end gap-2 transition-opacity duration-300 z-50 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
         {/* Size Menu */}
         <div className="relative">
-          <button onClick={() => { setShowSizeMenu(!showSizeMenu); setShowSpeedMenu(false); setShowTrackMenu(false); }} className="flex items-center gap-1.5 bg-black/80 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/10 text-white/90 hover:bg-slate-900 transition-all shadow-xl">
+          <button 
+            title={t.adjustFontSize}
+            onClick={() => { setShowSizeMenu(!showSizeMenu); setShowSpeedMenu(false); setShowTrackMenu(false); }} 
+            className="flex items-center gap-1.5 bg-black/80 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/10 text-white/90 hover:bg-slate-900 transition-all shadow-xl"
+          >
             <Type className="w-3.5 h-3.5 text-blue-400" />
           </button>
           {showSizeMenu && (
@@ -125,7 +134,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
         {/* Speed Menu */}
         <div className="relative">
-          <button onClick={() => { setShowSpeedMenu(!showSpeedMenu); setShowSizeMenu(false); setShowTrackMenu(false); }} className="flex items-center gap-1.5 bg-black/80 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/10 text-white/90 hover:bg-slate-900 transition-all shadow-xl">
+          <button 
+            title={t.playbackSpeed}
+            onClick={() => { setShowSpeedMenu(!showSpeedMenu); setShowSizeMenu(false); setShowTrackMenu(false); }} 
+            className="flex items-center gap-1.5 bg-black/80 backdrop-blur-xl px-2.5 py-1.5 rounded-xl border border-white/10 text-white/90 hover:bg-slate-900 transition-all shadow-xl"
+          >
             <span className="text-[11px] font-bold min-w-[24px] uppercase tracking-tighter">{playbackRate}x</span>
           </button>
           {showSpeedMenu && (
@@ -140,23 +153,27 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
 
         <div className="relative">
-          <button onClick={() => { setShowTrackMenu(!showTrackMenu); setShowSpeedMenu(false); setShowSizeMenu(false); }} className={`p-2 rounded-xl backdrop-blur-xl border border-white/10 transition-all ${activeTrackIds.length > 0 ? 'bg-blue-600/90 text-white shadow-xl' : 'bg-black/80 text-white/60 hover:text-white'}`}>
+          <button 
+            title={t.videoTracks}
+            onClick={() => { setShowTrackMenu(!showTrackMenu); setShowSpeedMenu(false); setShowSizeMenu(false); }} 
+            className={`p-2 rounded-xl backdrop-blur-xl border border-white/10 transition-all ${activeTrackIds.length > 0 ? 'bg-blue-600/90 text-white shadow-xl' : 'bg-black/80 text-white/60 hover:text-white'}`}
+          >
             <Captions className="w-4 h-4" />
           </button>
           {showTrackMenu && (
             <div className="absolute bottom-full mb-3 right-0 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[140px] py-1 animate-in fade-in slide-in-from-bottom-2">
               <div className="px-3 py-1.5 border-b border-white/5 mb-1">
-                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Video Tracks</p>
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{t.videoTracks}</p>
               </div>
               {tracks.length === 0 ? (
-                <p className="px-4 py-2 text-[10px] text-slate-500 italic">No subtitles found</p>
+                <p className="px-4 py-2 text-[10px] text-slate-500 italic">{t.noSubtitles}</p>
               ) : (
-                tracks.map(t => {
-                  const rank = activeTrackIds.indexOf(t.id);
+                tracks.map(t_node => {
+                  const rank = activeTrackIds.indexOf(t_node.id);
                   return (
-                    <button key={t.id} onClick={() => toggleTrack(t.id)} className={`w-full text-left px-4 py-2 text-[11px] font-medium flex items-center justify-between transition-colors ${rank !== -1 ? 'text-blue-400 bg-blue-500/5' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>
+                    <button key={t_node.id} onClick={() => toggleTrack(t_node.id)} className={`w-full text-left px-4 py-2 text-[11px] font-medium flex items-center justify-between transition-colors ${rank !== -1 ? 'text-blue-400 bg-blue-500/5' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>
                       <div className="flex items-center gap-1.5">
-                        {t.label}
+                        {t_node.label}
                         {rank !== -1 && (
                           <span className={`text-[8px] px-1 rounded-sm ${rank === 0 ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
                             {rank === 0 ? 'P' : 'S'}

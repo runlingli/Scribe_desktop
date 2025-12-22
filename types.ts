@@ -31,6 +31,7 @@ export interface ExplorerNode {
 }
 
 export type SidebarMode = 'transcript' | 'explorer' | 'settings';
+export type UILanguage = 'en' | 'zh';
 
 export interface VideoState {
   currentVideo: VideoFileEntry | null;
@@ -45,6 +46,7 @@ export interface VideoState {
   transcriptTrackIds: string[]; // Tracks shown in the right sidebar
   videoTrackIds: string[];      // Tracks shown on the video overlay
   rootFolderName: string;
+  uiLanguage: UILanguage;
 }
 
 export interface SuffixConfig {

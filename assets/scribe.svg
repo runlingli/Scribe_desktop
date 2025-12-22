@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <!-- player -->
+  <rect x="16" y="16" width="96" height="64" rx="8" fill="#0D1B3D" mask="url(#hole)" />
+
+  <!-- triangle -->
+  <mask id="hole">
+    <rect width="100%" height="100%" fill="white" />
+    <path d="M58 30
+       L88 43
+       Q93 48 88 52
+       L58 66
+       Q41 76 41 64
+       L41 32
+       Q42 24 50 26 Z" fill="black" />
+    <path d="M48 30
+       L84 46
+       Q86 48 84 50
+       L48 66
+       Q46 66 46 64
+       L46 32
+       Q46 30 48 30 Z" fill="white" />
+  </mask>
+
+  <rect x="16" y="88" width="82" height="8" rx="4" fill="#0D1B3D" mask="url(#dot)" />
+  <rect x="100" y="88" width="12" height="8" rx="2" fill="#0D1B3D" mask="url(#rec)" />
+
+  <mask id="rec">
+    <rect width="100%" height="100%" fill="white" />
+    <rect x="102" y="90" width="8" height="4" rx="1" fill="black" />
+  </mask>
+  <!-- dot -->
+  <mask id="dot">
+    <rect width="100%" height="100%" fill="white" />
+    <circle cx="32" cy="92" r="3" fill="black" />
+  </mask>
+</svg>

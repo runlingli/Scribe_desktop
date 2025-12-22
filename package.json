@@ -1,22 +1,57 @@
 {
-  "name": "scribe-desktop---local-video-player",
+  "name": "scribe",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "author": "runling",
+  "main": "dist/main.js",
+  "description": "A local video player with bilingual subtitle display, and integrated file explorer.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build:renderer": "vite build",
+    "build:preload": "tsc -p tsconfig.preload.json",
+    "build:main": "tsc -p tsconfig.main.json",
+    "prebuild": "npm run build:renderer",
+    "build": "npm run build:preload && npm run build:main",
+    "preview": "vite preview",
+    "predist": "npm run build",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.runling.scribe",
+    "productName": "Scribe",
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist"
+    },
+    "win": {
+      "icon": "assets/scribe.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "@google/genai": "^1.34.0",
     "lucide-react": "^0.562.0",
-    "@google/genai": "^1.34.0"
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

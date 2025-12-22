@@ -1,14 +1,16 @@
 
 import React, { useState, useMemo } from 'react';
 import { FolderOpen, PlayCircle, FileVideo, ChevronRight, ChevronDown, Folder, SortAsc, Calendar } from 'lucide-react';
-import { VideoFileEntry, ExplorerNode } from '../types';
+import { VideoFileEntry, ExplorerNode, UILanguage } from '../types';
 import { formatTimeCompact } from '../utils/videoUtils';
+import { translations } from '../utils/translations';
 
 interface FileExplorerProps {
   tree: ExplorerNode[];
   currentVideoId?: string;
   currentFolderName: string;
   onSelect: (video: VideoFileEntry) => void;
+  uiLanguage: UILanguage;
 }
 
 type SortBy = 'name' | 'date';
@@ -19,7 +21,6 @@ const NodeItem: React.FC<{
   currentVideoId?: string; 
   onSelect: (video: VideoFileEntry) => void 
 }> = ({ node, depth, currentVideoId, onSelect }) => {
-  // Folders are collapsed by default
   const [isOpen, setIsOpen] = useState(false);
 
   if (node.type === 'folder') {
@@ -75,12 +76,12 @@ const NodeItem: React.FC<{
   );
 };
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ tree, currentVideoId, currentFolderName, onSelect }) => {
+const FileExplorer: React.FC<FileExplorerProps> = ({ tree, currentVideoId, currentFolderName, onSelect, uiLanguage }) => {
   const [sortBy, setSortBy] = useState<SortBy>('name');
+  const t = translations[uiLanguage];
 
   const sortNodes = (nodes: ExplorerNode[]): ExplorerNode[] => {
     return [...nodes].sort((a, b) => {
-      // Folders always first
       if (a.type === 'folder' && b.type === 'file') return -1;
       if (a.type === 'file' && b.type === 'folder') return 1;
 
@@ -106,20 +107,22 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ tree, currentVideoId, curre
       <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/30">
         <div className="flex items-center gap-2 overflow-hidden flex-1">
           <FolderOpen className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-          <h2 className="text-[11px] font-bold text-slate-300 uppercase tracking-widest truncate">{currentFolderName}</h2>
+          <h2 className="text-[11px] font-bold text-slate-300 uppercase tracking-widest truncate">
+            {currentFolderName === 'No Folder Selected' ? t.noFolder : currentFolderName}
+          </h2>
         </div>
         
         <div className="flex items-center gap-1 shrink-0 ml-2">
           <button 
             onClick={() => setSortBy('name')} 
-            title="Sort by name"
+            title={t.sortByName}
             className={`p-1 rounded-md transition-all ${sortBy === 'name' ? 'bg-slate-800 text-blue-400 border border-white/5' : 'text-slate-600 hover:text-slate-400'}`}
           >
             <SortAsc className="w-3 h-3" />
           </button>
           <button 
             onClick={() => setSortBy('date')} 
-            title="Sort by date"
+            title={t.sortByDate}
             className={`p-1 rounded-md transition-all ${sortBy === 'date' ? 'bg-slate-800 text-blue-400 border border-white/5' : 'text-slate-600 hover:text-slate-400'}`}
           >
             <Calendar className="w-3 h-3" />
@@ -131,7 +134,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ tree, currentVideoId, curre
         {sortedTree.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-600 p-4 text-center opacity-40">
             <FileVideo className="w-8 h-8 mb-1" />
-            <p className="text-[11px] italic">No media indexed</p>
+            <p className="text-[11px] italic">{t.noMediaIndexed}</p>
           </div>
         ) : (
           <div className="space-y-0.5">

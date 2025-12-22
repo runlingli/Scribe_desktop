@@ -4,9 +4,11 @@ import { Upload, MessageSquare, AlertCircle, LayoutGrid, X, Settings, Plus, Tras
 import VideoPlayer from './components/VideoPlayer';
 import SubtitleList from './components/SubtitleList';
 import FileExplorer from './components/FileExplorer';
+import TitleBar from './components/TitleBar';
 import { VideoState, VideoFileEntry, SubtitleTrack, SidebarMode, SuffixConfig, ExplorerNode } from './types';
 import { parseSRT } from './utils/srtParser';
 import { getVideoDuration } from './utils/videoUtils';
+import { translations } from './utils/translations';
 
 const DEFAULT_SUFFIXES: SuffixConfig[] = [
   { suffix: 'zh', label: 'Chinese' },
@@ -27,20 +29,23 @@ const App: React.FC = () => {
     sidebarMode: 'transcript',
     transcriptTrackIds: [],
     videoTrackIds: [],
-    rootFolderName: 'No Folder Selected'
+    rootFolderName: 'No Folder Selected',
+    uiLanguage: 'en'
   });
   
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [subtitleSize, setSubtitleSize] = useState(1); // 1 = 100%
+  const [videoSubtitleSize, setVideoSubtitleSize] = useState(1.4); 
+  const [transcriptSubtitleSize, setTranscriptSubtitleSize] = useState(1.4);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [suffixConfigs, setSuffixConfigs] = useState<SuffixConfig[]>(DEFAULT_SUFFIXES);
   const [separators, setSeparators] = useState<string[]>(['.', '_', '-']);
   const [newSeparator, setNewSeparator] = useState('');
   
   const isResizing = useRef(false);
+  const t = translations[state.uiLanguage];
 
   const buildFolderTree = (videos: VideoFileEntry[]): ExplorerNode[] => {
     const root: ExplorerNode[] = [];
@@ -167,7 +172,6 @@ const App: React.FC = () => {
       })));
 
       const tree = buildFolderTree(newEntries);
-      // Logic changed: find the first video file via alphabetical tree traversal
       const videoToPlay = findFirstVideoInTree(tree);
       let tracks: SubtitleTrack[] = [];
 
@@ -175,7 +179,8 @@ const App: React.FC = () => {
         tracks = await matchSubtitles(videoToPlay, srtFiles);
       }
 
-      setState({
+      setState(prev => ({
+        ...prev,
         currentVideo: videoToPlay,
         playlist: newEntries,
         folderTree: tree,
@@ -188,7 +193,7 @@ const App: React.FC = () => {
         videoTrackIds: tracks.slice(0, 1).map(t => t.id),
         sidebarMode: tracks.length > 0 ? 'transcript' : 'explorer',
         rootFolderName: folderName
-      });
+      }));
       setError(null);
     } finally {
       setIsProcessing(false);
@@ -213,6 +218,10 @@ const App: React.FC = () => {
     }
   };
 
+  const toggleLanguage = () => {
+    setState(p => ({ ...p, uiLanguage: p.uiLanguage === 'en' ? 'zh' : 'en' }));
+  };
+
   const addSeparator = () => {
     if (newSeparator && !separators.includes(newSeparator)) {
       setSeparators([...separators, newSeparator]);
@@ -221,7 +230,8 @@ const App: React.FC = () => {
   };
 
   const clearLibrary = () => {
-    setState({
+    setState(prev => ({
+      ...prev,
       currentVideo: null,
       playlist: [],
       folderTree: [],
@@ -234,7 +244,7 @@ const App: React.FC = () => {
       transcriptTrackIds: [],
       videoTrackIds: [],
       rootFolderName: 'No Folder Selected'
-    });
+    }));
   };
 
   const handleTranscriptTrackToggle = (id: string) => {
@@ -269,7 +279,9 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="h-screen w-screen flex bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="h-screen w-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans">
+      <TitleBar uiLanguage={state.uiLanguage} onLanguageToggle={toggleLanguage} />
+      
       <main className="flex-1 flex gap-0 h-full overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden relative group">
           {isProcessing && (
@@ -278,7 +290,7 @@ const App: React.FC = () => {
                 <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
                 <div className="absolute inset-0 blur-lg bg-blue-500/20 animate-pulse" />
               </div>
-              <p className="text-sm font-bold text-blue-200 uppercase tracking-widest animate-pulse">Processing Files...</p>
+              <p className="text-sm font-bold text-blue-200 uppercase tracking-widest animate-pulse">{t.processing}</p>
             </div>
           )}
 
@@ -292,8 +304,8 @@ const App: React.FC = () => {
               <div className="p-8 rounded-3xl bg-slate-800/30 mb-6 group-hover:scale-105 transition-transform border border-white/5">
                 <FolderOpen className="w-16 h-16 text-blue-500/50" />
               </div>
-              <h3 className="text-2xl font-medium text-slate-400">Select Folder</h3>
-              <p className="text-sm text-slate-600 mt-2">Open your media library folder</p>
+              <h3 className="text-2xl font-medium text-slate-400">{t.selectFolder}</h3>
+              <p className="text-sm text-slate-600 mt-2">{t.openMediaLibrary}</p>
               {/* @ts-ignore */}
               <input id="folder-upload" type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={(e) => e.target.files && processFiles(e.target.files)} />
             </div>
@@ -310,16 +322,17 @@ const App: React.FC = () => {
                   activeTrackIds={state.videoTrackIds}
                   onTrackChange={(ids) => setState(p => ({ ...p, videoTrackIds: ids }))}
                   playbackRate={playbackRate}
-                  subtitleSize={subtitleSize}
+                  subtitleSize={videoSubtitleSize}
                   showSubtitles={showSubtitles}
                   onToggleSubtitles={() => setShowSubtitles(!showSubtitles)}
                   onSpeedChange={setPlaybackRate}
-                  onSizeChange={setSubtitleSize}
+                  onSizeChange={setVideoSubtitleSize}
                   onClose={() => setState(p => ({ ...p, currentVideo: null }))}
+                  uiLanguage={state.uiLanguage}
                 />
               ) : (
                  <div className="flex-1 flex items-center justify-center bg-slate-900/5 text-slate-600 text-sm italic">
-                   Select a video from the Explorer
+                   {state.uiLanguage === 'en' ? 'Select a video from the Explorer' : '从侧边栏文件浏览器中选择视频'}
                  </div>
               )}
             </div>
@@ -342,9 +355,9 @@ const App: React.FC = () => {
         <div className="flex flex-col h-full bg-slate-950 border-l border-slate-900 overflow-hidden shrink-0" style={{ width: `${sidebarWidth}px` }}>
            <div className="flex p-2 gap-1 bg-slate-950 border-b border-slate-900">
              {[
-               { mode: 'transcript' as SidebarMode, icon: <MessageSquare className="w-3.5 h-3.5" />, label: 'Transcript' },
-               { mode: 'explorer' as SidebarMode, icon: <LayoutGrid className="w-3.5 h-3.5" />, label: 'Explorer' },
-               { mode: 'settings' as SidebarMode, icon: <Settings className="w-3.5 h-3.5" />, label: 'Settings' }
+               { mode: 'transcript' as SidebarMode, icon: <MessageSquare className="w-3.5 h-3.5" />, label: t.transcript },
+               { mode: 'explorer' as SidebarMode, icon: <LayoutGrid className="w-3.5 h-3.5" />, label: t.explorer },
+               { mode: 'settings' as SidebarMode, icon: <Settings className="w-3.5 h-3.5" />, label: t.settings }
              ].map(item => (
                <button 
                  key={item.mode}
@@ -367,19 +380,22 @@ const App: React.FC = () => {
                  tracks={state.tracks}
                  activeTrackIds={state.transcriptTrackIds}
                  currentTime={state.currentTime}
-                 onSeek={(t) => setState(p => ({ ...p, currentTime: t }))}
+                 subtitleSize={transcriptSubtitleSize}
+                 onSizeChange={setTranscriptSubtitleSize}
+                 onSeek={(time) => setState(p => ({ ...p, currentTime: time }))}
+                 uiLanguage={state.uiLanguage}
                />
              )}
              {state.sidebarMode === 'explorer' && (
-               <FileExplorer tree={state.folderTree} currentVideoId={state.currentVideo?.id} currentFolderName={state.rootFolderName} onSelect={handleVideoSelect} />
+               <FileExplorer tree={state.folderTree} currentVideoId={state.currentVideo?.id} currentFolderName={state.rootFolderName} onSelect={handleVideoSelect} uiLanguage={state.uiLanguage} />
              )}
              {state.sidebarMode === 'settings' && (
-               <div className="flex flex-col h-full bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden p-3 gap-4">
+               <div className="flex flex-col h-full bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden p-3 gap-4 custom-scrollbar overflow-y-auto">
                  <div className="space-y-3">
-                   <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Sidebar Tracks</h3>
+                   <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t.sidebarTracks}</h3>
                    <div className="space-y-1">
                      {state.tracks.length === 0 ? (
-                       <p className="text-[10px] text-slate-600 italic">No tracks loaded</p>
+                       <p className="text-[10px] text-slate-600 italic">{t.noTracks}</p>
                      ) : (
                        state.tracks.map(track => {
                         const rank = state.transcriptTrackIds.indexOf(track.id);
@@ -397,7 +413,7 @@ const App: React.FC = () => {
                              {track.label}
                              {rank !== -1 && (
                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase ${rank === 0 ? 'bg-blue-500/50 text-white' : 'bg-slate-700/50 text-slate-300'}`}>
-                                 {rank === 0 ? 'Primary' : 'Secondary'}
+                                 {rank === 0 ? t.primary : t.secondary}
                                </span>
                              )}
                            </span>
@@ -409,7 +425,7 @@ const App: React.FC = () => {
                  </div>
 
                  <div className="space-y-3">
-                   <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Filename Separators</h3>
+                   <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t.filenameSeparators}</h3>
                    <div className="flex flex-wrap gap-2">
                      {separators.map(sep => (
                        <div key={sep} className="group flex items-center bg-blue-600/20 border border-blue-500/30 rounded-lg px-2 py-1">
@@ -435,14 +451,14 @@ const App: React.FC = () => {
                        onClick={addSeparator}
                        className="px-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs transition-colors font-bold"
                      >
-                       Add
+                       {t.add}
                      </button>
                    </div>
                  </div>
 
                  <div className="space-y-3 flex-1 flex flex-col min-h-0">
                    <div className="flex items-center justify-between">
-                     <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Suffix Mapping</h3>
+                     <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t.suffixMapping}</h3>
                      <button onClick={() => setSuffixConfigs([...suffixConfigs, { suffix: '', label: '' }])} className="p-1 text-blue-400 hover:text-blue-300"><Plus className="w-3.5 h-3.5" /></button>
                    </div>
                    <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-1">
@@ -479,9 +495,9 @@ const App: React.FC = () => {
                  
                  <button 
                    onClick={clearLibrary}
-                   className="mt-auto w-full py-2.5 bg-red-900/10 hover:bg-red-900/20 border border-red-500/20 rounded-xl text-xs text-red-400 font-bold transition-all flex items-center justify-center gap-2"
+                   className="mt-4 w-full py-2.5 bg-red-900/10 hover:bg-red-900/20 border border-red-500/20 rounded-xl text-xs text-red-400 font-bold transition-all flex items-center justify-center gap-2 shrink-0"
                  >
-                   <Trash2 className="w-3.5 h-3.5" /> Clear All Data
+                   <Trash2 className="w-3.5 h-3.5" /> {t.clearAll}
                  </button>
                </div>
              )}
