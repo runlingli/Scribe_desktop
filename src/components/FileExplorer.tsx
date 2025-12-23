@@ -85,13 +85,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ tree, currentVideoId, curre
       if (a.type === 'folder' && b.type === 'file') return -1;
       if (a.type === 'file' && b.type === 'folder') return 1;
 
-      if (sortBy === 'name') {
-        return a.name.localeCompare(b.name);
-      } else {
-        const timeA = a.video?.file.lastModified || 0;
-        const timeB = b.video?.file.lastModified || 0;
-        return timeB - timeA;
-      }
+      // Sort by name (date sorting not available without File object)
+      return a.name.localeCompare(b.name);
     }).map(node => {
       if (node.children) {
         return { ...node, children: sortNodes(node.children) };

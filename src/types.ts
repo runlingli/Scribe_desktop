@@ -1,3 +1,4 @@
+import { MediaFile } from './api/tauri';
 
 export interface SubtitleLine {
   id: string;
@@ -16,8 +17,8 @@ export interface SubtitleTrack {
 export interface VideoFileEntry {
   id: string;
   name: string;
-  file: File;
-  url: string;
+  path: string;           // Absolute file path from backend
+  streamUrl?: string;     // HTTP streaming URL from backend server
   relativePath: string;
   duration?: number;
 }
@@ -37,7 +38,7 @@ export interface VideoState {
   currentVideo: VideoFileEntry | null;
   playlist: VideoFileEntry[];
   folderTree: ExplorerNode[];
-  srtPool: File[];
+  srtPool: MediaFile[];  // Changed from File[] to MediaFile[] for backend integration
   currentTime: number;
   duration: number;
   isPlaying: boolean;

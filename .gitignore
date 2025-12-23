@@ -25,6 +25,7 @@ yarn-error.log*
 /src-tauri/crash.dmp
 
 # --- IDEs / Editors ---
+.claude/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
@@ -38,3 +39,4 @@ yarn-error.log*
 # --- Operating System Files ---
 Thumbs.db
 desktop.ini
+

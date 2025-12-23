@@ -7,8 +7,8 @@ import FileExplorer from './components/FileExplorer';
 import TitleBar from './components/TitleBar';
 import { VideoState, VideoFileEntry, SubtitleTrack, SidebarMode, SuffixConfig, ExplorerNode } from './types';
 import { parseSRT } from './utils/srtParser';
-import { getVideoDuration } from './utils/videoUtils';
 import { translations } from './utils/translations';
+import { selectFolderDialog, scanMediaFolder, readSrtFile, registerVideoStream, MediaFile } from './api/tauri';
 
 const DEFAULT_SUFFIXES: SuffixConfig[] = [
   { suffix: 'zh', label: 'Chinese' },
@@ -66,14 +66,15 @@ const App: React.FC = () => {
         // Fix: Cast appWindow to any to avoid conflict with global DOM Window type and ensure onDragDrop is recognized
         const appWindow = getCurrentWindow() as any;
         
-        unlisten = await appWindow.onDragDrop((event: any) => {
+        unlisten = await appWindow.onDragDrop(async (event: any) => {
           if (event.payload.paths && event.payload.paths.length > 0) {
-            // Since we can't get File objects directly from paths without fs plugin,
-            // we'll prompt the user or attempt to map if the env allows.
-            // For now, if Tauri drop is triggered, we advise the user or handle via standard input
-            // but in a real Tauri app, we'd use convertFileSrc and fs.readTextFile here.
-            console.log("Native paths received:", event.payload.paths);
-            // If the user wants a full native experience, we'd integrate @tauri-apps/plugin-fs
+            const droppedPath = event.payload.paths[0];
+            try {
+              await processFolder(droppedPath);
+            } catch (err) {
+              console.error("Failed to process dropped folder:", err);
+              setError("Failed to process dropped folder. Please ensure it's a valid directory.");
+            }
           }
         });
       } catch (e) {
@@ -149,31 +150,30 @@ const App: React.FC = () => {
     return null;
   };
 
-  const matchSubtitles = async (video: VideoFileEntry, pool: File[]) => {
+  const matchSubtitles = async (video: VideoFileEntry, pool: MediaFile[]) => {
     const videoNameParts = video.name.split('.');
     videoNameParts.pop();
     const videoBase = videoNameParts.join('.').toLowerCase();
     const videoDir = video.relativePath.substring(0, video.relativePath.lastIndexOf('/') + 1);
-    
+
     const matchedSrts = pool.filter(s => {
-      const srtPath = (s as any).webkitRelativePath || '';
-      const srtDir = srtPath.substring(0, srtPath.lastIndexOf('/') + 1);
+      const srtDir = s.relative_path.substring(0, s.relative_path.lastIndexOf('/') + 1);
       const srtName = s.name.toLowerCase();
       return srtDir === videoDir && srtName.startsWith(videoBase);
     });
-    
+
     const newTracks: SubtitleTrack[] = [];
     for (const srtFile of matchedSrts) {
       const fileName = srtFile.name.toLowerCase();
       let label = 'Unknown';
       let language = 'auto';
-      
+
       for (const config of suffixConfigs) {
         if (!config.suffix) continue;
-        const isMatched = separators.some(sep => 
+        const isMatched = separators.some(sep =>
           fileName.endsWith(`${sep}${config.suffix.toLowerCase()}.srt`)
         );
-        
+
         if (isMatched) {
           label = config.label || config.suffix;
           language = config.suffix;
@@ -197,7 +197,7 @@ const App: React.FC = () => {
         }
       }
 
-      const text = await srtFile.text();
+      const text = await readSrtFile(srtFile.path);
       newTracks.push({
         id: Math.random().toString(36).substr(2, 9),
         label,
@@ -208,44 +208,64 @@ const App: React.FC = () => {
     return newTracks;
   };
 
-  const processFiles = async (files: FileList) => {
+  const processFolder = async (folderPath: string) => {
     setIsProcessing(true);
     try {
-      const fileList = Array.from(files);
-      const videoFiles = fileList.filter(f => f.type.startsWith('video/'));
-      const srtFiles = fileList.filter(f => f.name.endsWith('.srt'));
+      console.log('Scanning folder:', folderPath);
+      // Scan folder using backend
+      const scanResult = await scanMediaFolder(folderPath);
+      console.log('Scan result:', scanResult);
 
-      if (videoFiles.length === 0 && srtFiles.length === 0) {
+      if (scanResult.videos.length === 0 && scanResult.subtitles.length === 0) {
         setError('No compatible files found.');
+        setIsProcessing(false);
         return;
       }
 
-      const firstPath = (fileList[0] as any).webkitRelativePath || '';
-      const folderName = firstPath.split('/')[0] || 'Local Folder';
+      console.log('Registering videos for streaming...');
+      // Register all videos for streaming and extract durations
+      const videoEntries: VideoFileEntry[] = await Promise.all(
+        scanResult.videos.map(async (video, index) => {
+          console.log(`Registering video ${index + 1}/${scanResult.videos.length}:`, video.name);
+          // Register video with streaming server
+          const streamUrl = await registerVideoStream(video.path);
+          console.log('Stream URL:', streamUrl);
 
-      const newEntries: VideoFileEntry[] = await Promise.all(videoFiles.map(async f => ({
-        id: Math.random().toString(36).substr(2, 9),
-        name: f.name,
-        file: f,
-        url: URL.createObjectURL(f),
-        relativePath: (f as any).webkitRelativePath || '',
-        duration: await getVideoDuration(f)
-      })));
+          // Extract duration using browser fallback
+          let duration = video.duration;
+          if (!duration || duration === 0) {
+            console.log('Extracting duration from stream...');
+            duration = await getVideoDurationFromUrl(streamUrl);
+          }
 
-      const tree = buildFolderTree(newEntries);
+          return {
+            id: video.id,
+            name: video.name,
+            path: video.path,
+            streamUrl,
+            relativePath: video.relative_path,
+            duration,
+          };
+        })
+      );
+
+      console.log('Building folder tree...');
+      const tree = buildFolderTree(videoEntries);
       const videoToPlay = findFirstVideoInTree(tree);
       let tracks: SubtitleTrack[] = [];
 
       if (videoToPlay) {
-        tracks = await matchSubtitles(videoToPlay, srtFiles);
+        console.log('Matching subtitles for:', videoToPlay.name);
+        tracks = await matchSubtitles(videoToPlay, scanResult.subtitles);
       }
 
+      console.log('Setting state with processed data...');
       setState(prev => ({
         ...prev,
         currentVideo: videoToPlay,
-        playlist: newEntries,
+        playlist: videoEntries,
         folderTree: tree,
-        srtPool: srtFiles,
+        srtPool: scanResult.subtitles,
         currentTime: 0,
         duration: 0,
         isPlaying: false,
@@ -253,12 +273,48 @@ const App: React.FC = () => {
         transcriptTrackIds: tracks.slice(0, 2).map(t => t.id),
         videoTrackIds: tracks.slice(0, 1).map(t => t.id),
         sidebarMode: tracks.length > 0 ? 'transcript' : 'explorer',
-        rootFolderName: folderName
+        rootFolderName: scanResult.root_folder_name
       }));
       setError(null);
+      console.log('Processing complete!');
+    } catch (err) {
+      console.error('Error in processFolder:', err);
+      setError(`Failed to process folder: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Helper function for duration extraction fallback
+  const getVideoDurationFromUrl = (url: string): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.crossOrigin = 'anonymous';
+
+      // Set a timeout in case metadata never loads
+      const timeout = setTimeout(() => {
+        console.warn('Duration extraction timed out for:', url);
+        video.remove();
+        resolve(0);
+      }, 10000); // 10 second timeout
+
+      video.onloadedmetadata = () => {
+        clearTimeout(timeout);
+        console.log('Duration extracted:', video.duration);
+        resolve(video.duration);
+        video.remove();
+      };
+
+      video.onerror = (e) => {
+        clearTimeout(timeout);
+        console.error('Error loading video for duration extraction:', e, url);
+        resolve(0);
+        video.remove();
+      };
+
+      video.src = url;
+    });
   };
 
   const handleVideoSelect = async (video: VideoFileEntry) => {
@@ -287,6 +343,27 @@ const App: React.FC = () => {
     if (newSeparator && !separators.includes(newSeparator)) {
       setSeparators([...separators, newSeparator]);
       setNewSeparator('');
+    }
+  };
+
+  const handleSelectFolder = async () => {
+    setIsProcessing(true);
+    try {
+      console.log('Calling selectFolderDialog...');
+      const folderPath = await selectFolderDialog();
+      console.log('Selected folder:', folderPath);
+
+      if (!folderPath) {
+        console.log('No folder selected');
+        setIsProcessing(false);
+        return;
+      }
+
+      await processFolder(folderPath);
+    } catch (err) {
+      console.error('Error in handleSelectFolder:', err);
+      setError(`Failed to select folder: ${err instanceof Error ? err.message : String(err)}`);
+      setIsProcessing(false);
     }
   };
 
@@ -362,29 +439,21 @@ const App: React.FC = () => {
           )}
 
           {!state.currentVideo && state.folderTree.length === 0 ? (
-            <div 
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={(e) => { 
-                e.preventDefault(); 
-                e.stopPropagation();
-                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) processFiles(e.dataTransfer.files); 
-              }}
+            <div
               className="flex-1 flex flex-col items-center justify-center bg-slate-900/10 hover:bg-slate-900/20 transition-all cursor-pointer"
-              onClick={() => document.getElementById('folder-upload')?.click()}
+              onClick={handleSelectFolder}
             >
               <div className="p-8 rounded-3xl bg-slate-800/30 mb-6 group-hover:scale-105 transition-transform border border-white/5">
                 <FolderOpen className="w-16 h-16 text-blue-500/50" />
               </div>
               <h3 className="text-2xl font-medium text-slate-400">{t.selectFolder}</h3>
               <p className="text-sm text-slate-600 mt-2">{t.openMediaLibrary}</p>
-              {/* @ts-ignore */}
-              <input id="folder-upload" type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={(e) => e.target.files && processFiles(e.target.files)} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden relative">
-              {state.currentVideo ? (
-                <VideoPlayer 
-                  url={state.currentVideo.url} 
+              {state.currentVideo && state.currentVideo.streamUrl ? (
+                <VideoPlayer
+                  url={state.currentVideo.streamUrl}
                   title={state.currentVideo.name}
                   onTimeUpdate={(t) => setState(p => ({ ...p, currentTime: t }))}
                   onDurationChange={(d) => setState(p => ({ ...p, duration: d }))}
@@ -400,6 +469,11 @@ const App: React.FC = () => {
                   uiLanguage={state.uiLanguage}
                   secondaryOpacity={secondaryOpacity}
                 />
+              ) : state.currentVideo ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                  <p className="ml-3 text-slate-400">Preparing video...</p>
+                </div>
               ) : (
                  <div className="flex-1 flex items-center justify-center bg-slate-900/5 text-slate-600 text-sm italic">
                    {state.uiLanguage === 'en' ? 'Select a video from the Explorer' : '从侧边栏文件浏览器中选择视频'}

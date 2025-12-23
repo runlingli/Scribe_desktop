@@ -91,11 +91,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => { setIsHovered(false); setShowSpeedMenu(false); setShowSizeMenu(false); setShowTrackMenu(false); }}
     >
-      <video 
+      <video
         ref={videoRef}
         src={url}
         className="w-full h-full object-contain outline-none cursor-pointer"
         controls
+        crossOrigin="anonymous"
         onTimeUpdate={(e) => onTimeUpdate(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => onDurationChange(e.currentTarget.duration)}
       />
