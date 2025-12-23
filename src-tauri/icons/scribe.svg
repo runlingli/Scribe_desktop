@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="3 0 131 128" fill="none">
+  <!-- player -->
+
+  <path d="M 33.1718 12.1068 Q 11.8829 12.1068 11.8829 33.0086 L 11.8829 91.0694 Q 11.8829 110.8101 34.1395 110.8101 L 90.265 110.8101 Q 111.5539 110.8101 111.5539 91.0694 L 111.5539 33.0086 Q 111.5539 13.268 90.265 13.268 L 33.1718 12.1068 M -72.3053 -20.4073"
+    fill="#2d3d5a" mask="url(#hole)" />
+  <path d="M 9.2 49.4 Q 9.2 36.2 24.8 44.6 L 58.4 62.6 Q 62 65 62 68.6 Q 62 72.2 58.4 74.6 L 24.8 92.6 Q 9.2 101 9.2 87.8 L 9.2 49.4" fill="#5f7394"/>
+  <!-- triangle -->
+  <mask id="hole">
+    <rect width="100%" height="100%" fill="white" />
+    <rect x="3" y="36" width="65" height="67" rx="9" fill="black"/>
+    <rect x="74" y="36" width="59" height="90" rx="9" fill="black" />
+  </mask>
+
+   <mask id="sub">
+    <rect width="100%" height="100%" fill="white" />
+    <rect x="85" y="56" width="29" height="4" rx="3" fill="black" />
+    <rect x="85" y="68" width="29" height="4" rx="3" fill="black" />
+    <rect x="85" y="80" width="29" height="4" rx="3" fill="black" />
+    <rect x="85" y="92" width="29" height="4" rx="3" fill="black" />
+    <rect x="85" y="104" width="29" height="4" rx="3" fill="black" />
+  </mask>
+
+
+  
+  <rect x="78" y="40" width="45" height="80" rx="8" fill="#5f7394" mask="url(#sub)"/>
+</svg>

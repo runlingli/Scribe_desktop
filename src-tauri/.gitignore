@@ -1,0 +1,40 @@
+# --- Frontend (Node.js/Vite/React) ---
+node_modules/
+dist/
+dist-isolation/
+.DS_Store
+.env
+.env.local
+.env.*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Backend (Rust/Cargo) ---
+/src-tauri/target/
+/src-tauri/Cargo.lock
+
+# --- Tauri Specific ---
+/src-tauri/binaries/
+/src-tauri/gen/
+/src-tauri/dump.rdb
+
+# --- Logs and temporary files ---
+/src-tauri/*.log
+/src-tauri/crash.dmp
+
+# --- IDEs / Editors ---
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Operating System Files ---
+Thumbs.db
+desktop.ini
