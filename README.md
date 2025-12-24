@@ -15,7 +15,7 @@ And me
 
 📦 **[Download Scribe Desktop](https://github.com/runlingli/Scribe_desktop_video_player/releases/)**
 
-**v0.2.0**: Just click to run, no need to setup
+**v0.2.2**: Just click to run, no need to setup
 
 If the tauri version does not work, please use v0.1.0
 
