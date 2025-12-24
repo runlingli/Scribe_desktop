@@ -52,29 +52,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const video = videoRef.current;
     if (!video || !url) return;
   
-    // 1. 清除当前状态并重新加载
     video.pause();
     video.load(); 
   
     const handleCanPlay = async () => {
       video.playbackRate = playbackRate;
-      
-      // 恢复进度
+
       if (currentTime > 0 && Math.abs(video.currentTime - currentTime) > 0.5) {
         video.currentTime = currentTime;
       }
   
       try {
         await video.play();
-        console.log("播放成功");
       } catch (err) {
-        console.warn("自动播放被拦截:", err);
       }
     };
   
     video.addEventListener('canplay', handleCanPlay, { once: true });
     return () => video.removeEventListener('canplay', handleCanPlay);
-  }, [url]); // 仅监听 URL 变化
+  }, [url]); 
 
   useEffect(() => {
     if (videoRef.current) {
@@ -102,7 +98,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         newIds = newIds.slice(-2);
       }
     }
-    console.log("手动切换字幕 ID 结果:", newIds);
     onTrackChange(newIds);
   };
   const speeds = [0.5, 1, 1.25, 1.5, 2, 2.5, 3];
@@ -173,7 +168,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             <div className="absolute bottom-full mb-3 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[80px] py-1 animate-in fade-in slide-in-from-bottom-2">
               {speeds.map(s => (
                 <button key={s} onClick={() => { onSpeedChange(s); setShowSpeedMenu(false); }} className={`w-full text-left px-2 py-2 text-sm font-bold transition-colors ${playbackRate === s ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>
-                  {s}x
+                  {s}
                 </button>
               ))}
             </div>
