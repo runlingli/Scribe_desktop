@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import { SubtitleTrack, UILanguage } from '../types';
 import { Captions, X, Check, Type } from 'lucide-react';
@@ -50,13 +49,38 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const t = translations[uiLanguage];
 
   useEffect(() => {
-    if (videoRef.current && Math.abs(videoRef.current.currentTime - currentTime) > 0.5) {
-      videoRef.current.currentTime = currentTime;
-    }
-  }, [currentTime]);
+    const video = videoRef.current;
+    if (!video || !url) return;
+  
+    video.load();
+  
+    const handleCanPlay = async () => {
+
+      video.playbackRate = playbackRate;
+      
+      if (currentTime > 0 && Math.abs(video.currentTime - currentTime) > 0.5) {
+        video.currentTime = currentTime;
+      }
+  
+      try {
+        await video.play();
+        console.log("switching video successful!");
+      } catch (err) {
+        console.warn("player: autoplay fails", err);
+        // If it's being blocked, it's usually because there's no user interaction, and muting the sound can often solve the problem.
+        // video.muted = true; 
+        // video.play();
+      }
+    };
+  
+    video.addEventListener('canplay', handleCanPlay, { once: true });
+    return () => video.removeEventListener('canplay', handleCanPlay);
+  }, [url]); // reload once url change
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = playbackRate;
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackRate;
+    }
   }, [playbackRate]);
 
   const displayedTracks = activeTrackIds
@@ -70,14 +94,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const toggleTrack = (id: string) => {
     const isSelected = activeTrackIds.includes(id);
     let newIds: string[];
+    
     if (isSelected) {
       newIds = activeTrackIds.filter(i => i !== id);
     } else {
-      newIds = [...activeTrackIds, id].slice(-2);
+      newIds = [...activeTrackIds, id];
+      if (newIds.length > 2) {
+        newIds = newIds.slice(-2);
+      }
     }
+    console.log("手动切换字幕 ID 结果:", newIds);
     onTrackChange(newIds);
   };
-
   const speeds = [0.5, 1, 1.25, 1.5, 2, 2.5, 3];
   const sizes = [
     { label: t.tiny, val: 0.6 },
@@ -88,18 +116,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   ];
 
   useEffect(() => {
-    if (videoRef.current && url) {
-      
-      videoRef.current.load(); 
-      const playPromise = videoRef.current.play();
-      
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.log("Autoplay was prevented:", error);
-        });
-      }
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackRate;
     }
-  }, [url]);
+  }, [playbackRate]);
 
   return (
     <div 

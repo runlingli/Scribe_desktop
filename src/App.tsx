@@ -28,18 +28,33 @@ const App: React.FC = () => {
     duration: 0,
     isPlaying: false,
     tracks: [],
-    sidebarMode: 'transcript',
+    sidebarMode: 'explorer',
     transcriptTrackIds: [],
     videoTrackIds: [],
     rootFolderName: 'No Folder Selected',
     uiLanguage: 'en'
   });
+
+  const [playbackRate, setPlaybackRate] = useState(() => 
+    Number(localStorage.getItem('v-speed')) || 1
+  );
+  const [videoSubtitleSize, setVideoSubtitleSize] = useState(() => 
+    Number(localStorage.getItem('v-size')) || 1.0
+  );
+
+  const updatePlaybackRate = (rate: number) => {
+    setPlaybackRate(rate);
+    localStorage.setItem('v-speed', rate.toString());
+  };
+
+  const updateSubtitleSize = (size: number) => {
+    setVideoSubtitleSize(size);
+    localStorage.setItem('v-size', size.toString());
+  };
   
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(320);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [videoSubtitleSize, setVideoSubtitleSize] = useState(1.0); 
   const [transcriptSubtitleSize, setTranscriptSubtitleSize] = useState(1.1);
   const [uiFontSizeScale, setUiFontSizeScale] = useState(1.0);
   const [secondaryOpacity, setSecondaryOpacity] = useState(0.8);
@@ -49,6 +64,9 @@ const App: React.FC = () => {
   
   const isResizing = useRef(false);
   const t = translations[state.uiLanguage];
+  const activeIdsRef = useRef<string[]>([]);
+
+  const LAST_TIME_KEY = 'v-last-time';
 
   useEffect(() => {
     // 20px is a solid base for desktop apps to make 'rem' comfortable
@@ -100,6 +118,22 @@ const App: React.FC = () => {
       window.removeEventListener('drop', preventDefault);
     };
   }, []);
+
+  useEffect(() => {
+    const initApp = async () => {
+      const savedFolder = localStorage.getItem('v-last-folder');
+      
+      if (savedFolder) {
+        console.log("detect folder opened last time", savedFolder);
+        await processFolder(savedFolder);
+      } else {
+        console.log("initializing...");
+      }
+    };
+  
+    initApp();
+  }, []);
+
 
   const handleZoomToggle = () => {
     setUiFontSizeScale(prev => {
@@ -205,7 +239,7 @@ const App: React.FC = () => {
 
       const text = await readSrtFile(srtFile.path);
       newTracks.push({
-        id: Math.random().toString(36).substr(2, 9),
+        id: srtFile.path,
         label,
         language,
         lines: parseSRT(text)
@@ -216,79 +250,117 @@ const App: React.FC = () => {
 
   const processFolder = async (folderPath: string) => {
     setIsProcessing(true);
+    setError(null);
+  
     try {
-      console.log('Scanning folder:', folderPath);
-      // Scan folder using backend
       const scanResult = await scanMediaFolder(folderPath);
-      console.log('Scan result:', scanResult);
-
-      if (scanResult.videos.length === 0 && scanResult.subtitles.length === 0) {
-        setError('No compatible files found.');
+      localStorage.setItem('v-last-folder', folderPath);
+      
+      if (scanResult.videos.length === 0) {
+        setError('No video files found.');
         setIsProcessing(false);
         return;
       }
-
-      console.log('Registering videos for streaming...');
-      // Register all videos for streaming and extract durations
-      const videoEntries = await Promise.all(
-        scanResult.videos.map(async (video) => {
-          const streamUrl = await registerVideoStream(video.path);
-          console.log('Modified at ', video.modified_at);
-          return {
-            id: video.id,
-            name: video.name,
-            path: video.path,
-            streamUrl,
-            relativePath: video.relative_path,
-            duration: video.duration || 0, // store the value from the backend first
-            modified_at: video.modified_at || 0
-          };
-        })
+  
+      const videoEntries: VideoFileEntry[] = await Promise.all(
+        scanResult.videos.map(async (v) => ({
+          id: v.id,
+          name: v.name,
+          path: v.path,
+          streamUrl: await registerVideoStream(v.path),
+          relativePath: v.relative_path,
+          duration: v.duration || 0,
+          modified_at: v.modified_at || 0
+        }))
       );
-
+  
       const tree = buildFolderTree(videoEntries);
-      // fix after initialize
-      setState(prev => ({ ...prev, playlist: videoEntries, folderTree: tree }));
+      
+      const lastPath = localStorage.getItem('v-last-path');
+      const lastTimeStr = localStorage.getItem('v-last-time');
+      const lastTime = Number(lastTimeStr) || 0;
 
-      for (const v of videoEntries) {
-        if (v.duration === 0) {
-          const realDuration = await getVideoDurationFromUrl(v.streamUrl);
-          v.duration = realDuration; 
-        }
+  
+      const matchedVideo = videoEntries.find(v => v.path === lastPath) || findFirstVideoInTree(tree);
+      
+      const finalVideo = matchedVideo ?? null;
+  
+  
+      let initialTracks: SubtitleTrack[] = [];
+      if (finalVideo) {
+        initialTracks = await matchSubtitles(finalVideo, scanResult.subtitles);
       }
 
-      console.log('Building folder tree...');
-      const videoToPlay = findFirstVideoInTree(tree);
-      let tracks: SubtitleTrack[] = [];
-
-      if (videoToPlay) {
-        console.log('Matching subtitles for:', videoToPlay.name);
-        tracks = await matchSubtitles(videoToPlay, scanResult.subtitles);
-      }
-
-      console.log('Setting state with processed data...');
       setState(prev => ({
         ...prev,
-        currentVideo: videoToPlay,
         playlist: videoEntries,
         folderTree: tree,
         srtPool: scanResult.subtitles,
-        currentTime: 0,
-        duration: 0,
-        isPlaying: false,
-        tracks,
-        transcriptTrackIds: tracks.slice(0, 2).map(t => t.id),
-        videoTrackIds: tracks.slice(0, 1).map(t => t.id),
-        sidebarMode: tracks.length > 0 ? 'transcript' : 'explorer',
-        rootFolderName: scanResult.root_folder_name
+        currentVideo: finalVideo,
+        currentTime: (finalVideo && finalVideo.path === lastPath) ? lastTime : 0, 
+        tracks: initialTracks,
+        videoTrackIds: initialTracks.slice(0, 1).map(t => t.id), 
+        transcriptTrackIds: initialTracks.slice(0, 2).map(t => t.id),
+        rootFolderName: scanResult.root_folder_name,
+        sidebarMode: initialTracks.length > 0 ? 'transcript' : 'explorer'
       }));
-      setError(null);
-      console.log('Processing complete!');
+  
+      fillMissingDurations(videoEntries);
+  
     } catch (err) {
-      console.error('Error in processFolder:', err);
-      setError(`Failed to process folder: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('Process error:', err);
+      setError('Failed to load folder contents.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  
+  const fillMissingDurations = async (entries: VideoFileEntry[]) => {
+    const missing = entries.filter(v => v.duration === 0);
+
+    for (const video of missing) {
+      if (!video.streamUrl) continue;
+
+      try {
+        const d = await getVideoDurationFromUrl(video.streamUrl);
+        
+        if (d > 0) {
+          setState(prev => {
+            const newPlaylist = prev.playlist.map(item => 
+              item.id === video.id ? { ...item, duration: d } : item
+            );
+            
+            const updateTree = (nodes: ExplorerNode[]): ExplorerNode[] => {
+              return nodes.map(node => {
+                if (node.video && node.video.id === video.id) {
+                  return { ...node, video: { ...node.video, duration: d } };
+                }
+                if (node.children) {
+                  return { ...node, children: updateTree(node.children) };
+                }
+                return node;
+              });
+            };
+
+            const newTree = updateTree(prev.folderTree);
+
+            let newCurrent = prev.currentVideo;
+            if (prev.currentVideo?.id === video.id) {
+              newCurrent = { ...prev.currentVideo, duration: d };
+            }
+
+            return {
+              ...prev,
+              playlist: newPlaylist,
+              folderTree: newTree,
+              currentVideo: newCurrent
+            };
+          });
+        }
+      } catch (e) {
+        console.warn(`fail to get duration: ${video.name}`, e);
+      }
     }
   };
 
@@ -297,51 +369,78 @@ const App: React.FC = () => {
     return new Promise((resolve) => {
       const video = document.createElement('video');
       video.preload = 'metadata';
-      video.crossOrigin = 'anonymous';
+      video.muted = true; 
 
-      // Set a timeout in case metadata never loads
       const timeout = setTimeout(() => {
-        console.warn('Duration extraction timed out for:', url);
+        video.src = "";
         video.remove();
         resolve(0);
-      }, 10000); // 10 second timeout
+      }, 10000);
 
       video.onloadedmetadata = () => {
         clearTimeout(timeout);
-        console.log('Duration extracted:', video.duration);
-        resolve(video.duration);
+        const duration = video.duration;
+        video.src = ""; 
         video.remove();
+        resolve(duration || 0);
       };
 
-      video.onerror = (e) => {
+      video.onerror = () => {
         clearTimeout(timeout);
-        console.error('Error loading video for duration extraction:', e, url);
-        resolve(0);
         video.remove();
+        resolve(0);
       };
 
       video.src = url;
+      video.load();
     });
   };
 
   const handleVideoSelect = useCallback(async (video: VideoFileEntry) => {
+    localStorage.setItem('v-last-path', video.path);
+    // 重置时间记录
+    localStorage.setItem('v-last-time', "0");
+    const currentIds = activeIdsRef.current;
+  
+    // 1. 记录偏好
+    const previousPreferredLabels = state.tracks
+      .filter(t => currentIds.includes(t.id))
+      .map(t => t.label);
+  
     setIsProcessing(true);
     try {
-      const tracks = await matchSubtitles(video, state.srtPool);
-      setState(prev => ({ 
-        ...prev, 
-        currentVideo: video, 
-        currentTime: 0, 
+      const newTracks = await matchSubtitles(video, state.srtPool);
+      
+      // 2. 尝试匹配
+      let newMatchedIds = newTracks
+        .filter(t => previousPreferredLabels.includes(t.label))
+        .map(t => t.id);
+  
+      // --- 关键点 2: 严格保持数量继承 ---
+      // 如果之前只选了一个，但匹配出了两个（可能因为 label 重复或其他逻辑），强制只取最后一个（最新选择的）
+      if (previousPreferredLabels.length === 1 && newMatchedIds.length > 1) {
+         newMatchedIds = [newMatchedIds[newMatchedIds.length - 1]];
+      }
+  
+      // 3. 兜底逻辑：如果什么都没匹配到，只默认选第 1 个，而不是前 2 个
+      if (newMatchedIds.length === 0 && newTracks.length > 0) {
+        newMatchedIds = [newTracks[0].id]; 
+        console.log("未匹配到偏好，默认选中第一个:", newMatchedIds);
+      }
+  
+      setState(prev => ({
+        ...prev,
+        currentVideo: video,
+        currentTime: 0,
         isPlaying: true,
-        tracks,
-        transcriptTrackIds: tracks.slice(0, 2).map(t => t.id),
-        videoTrackIds: tracks.slice(0, 1).map(t => t.id),
-        // sidebarMode: tracks.length > 0 ? 'transcript' : 'explorer'
+        tracks: newTracks,
+        videoTrackIds: newMatchedIds,
+        transcriptTrackIds: newMatchedIds, 
       }));
     } finally {
       setIsProcessing(false);
     }
-  }, [state.srtPool]);
+  }, [state.videoTrackIds, state.tracks, state.srtPool]);
 
   const playNextVideo = useCallback(() => {
     const { currentVideo, playlist } = state;
@@ -477,19 +576,28 @@ const App: React.FC = () => {
             <div className="flex-1 flex flex-col overflow-hidden relative">
               {state.currentVideo && state.currentVideo.streamUrl ? (
                 <VideoPlayer
+                  key={state.currentVideo?.id}
                   url={state.currentVideo.streamUrl}
                   title={state.currentVideo.name}
-                  onTimeUpdate={(t) => setState(p => ({ ...p, currentTime: t }))}
+                  onTimeUpdate={(time) => {
+                    if (Math.floor(time) !== Math.floor(state.currentTime)) {
+                      localStorage.setItem(LAST_TIME_KEY, time.toString());
+                    }
+                    setState(prev => ({ ...prev, currentTime: time }));
+                  }}
                   onDurationChange={(d) => setState(p => ({ ...p, duration: d }))}
                   onEnded={playNextVideo}
                   currentTime={state.currentTime}
                   tracks={state.tracks}
                   activeTrackIds={state.videoTrackIds}
-                  onTrackChange={(ids) => setState(p => ({ ...p, videoTrackIds: ids }))}
+                  onTrackChange={(ids) => {
+                    activeIdsRef.current = ids;
+                    setState(prev => ({ ...prev, videoTrackIds: ids }));
+                  }}
                   playbackRate={playbackRate}
                   subtitleSize={videoSubtitleSize}
-                  onSpeedChange={setPlaybackRate}
-                  onSizeChange={setVideoSubtitleSize}
+                  onSpeedChange={updatePlaybackRate}
+                  onSizeChange={updateSubtitleSize}
                   onClose={() => setState(p => ({ ...p, currentVideo: null }))}
                   uiLanguage={state.uiLanguage}
                   secondaryOpacity={secondaryOpacity}
