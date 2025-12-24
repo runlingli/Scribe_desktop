@@ -64,9 +64,11 @@ const App: React.FC = () => {
   
   const isResizing = useRef(false);
   const t = translations[state.uiLanguage];
-  const activeIdsRef = useRef<string[]>([]);
 
   const LAST_TIME_KEY = 'v-last-time';
+
+  const preferredVideoLabelsRef = useRef<string[]>([]);
+  const preferredTranscriptLabelsRef = useRef<string[]>([]);
 
   useEffect(() => {
     // 20px is a solid base for desktop apps to make 'rem' comfortable
@@ -121,16 +123,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initApp = async () => {
-      const savedFolder = localStorage.getItem('v-last-folder');
+      const savedFolder = localStorage.getItem('v-last-folder'); 
       
       if (savedFolder) {
-        console.log("detect folder opened last time", savedFolder);
+        console.log("restore folder:", savedFolder);
         await processFolder(savedFolder);
-      } else {
-        console.log("initializing...");
       }
     };
-  
     initApp();
   }, []);
 
@@ -285,11 +284,17 @@ const App: React.FC = () => {
       
       const finalVideo = matchedVideo ?? null;
   
+
   
       let initialTracks: SubtitleTrack[] = [];
       if (finalVideo) {
         initialTracks = await matchSubtitles(finalVideo, scanResult.subtitles);
       }
+      
+      const initIds = initialTracks.slice(0, 1).map(t => t.id);
+      const initLabels = initialTracks.filter(t => initIds.includes(t.id)).map(t => t.label);
+      preferredVideoLabelsRef.current = initLabels;
+      preferredTranscriptLabelsRef.current = initialTracks.slice(0, 2).map(t => t.label);
 
       setState(prev => ({
         ...prev,
@@ -398,35 +403,26 @@ const App: React.FC = () => {
 
   const handleVideoSelect = useCallback(async (video: VideoFileEntry) => {
     localStorage.setItem('v-last-path', video.path);
-    // 重置时间记录
     localStorage.setItem('v-last-time', "0");
-    const currentIds = activeIdsRef.current;
-  
-    // 1. 记录偏好
-    const previousPreferredLabels = state.tracks
-      .filter(t => currentIds.includes(t.id))
-      .map(t => t.label);
   
     setIsProcessing(true);
     try {
       const newTracks = await matchSubtitles(video, state.srtPool);
+  
+      // --- 计算视频字幕继承 ---
+      const nextVideoIds = newTracks
+        .filter(t => preferredVideoLabelsRef.current.includes(t.label))
+        .map(t => t.id);
       
-      // 2. 尝试匹配
-      let newMatchedIds = newTracks
-        .filter(t => previousPreferredLabels.includes(t.label))
+      // --- 计算侧边栏字幕继承 ---
+      const nextTranscriptIds = newTracks
+        .filter(t => preferredTranscriptLabelsRef.current.includes(t.label))
         .map(t => t.id);
   
-      // --- 关键点 2: 严格保持数量继承 ---
-      // 如果之前只选了一个，但匹配出了两个（可能因为 label 重复或其他逻辑），强制只取最后一个（最新选择的）
-      if (previousPreferredLabels.length === 1 && newMatchedIds.length > 1) {
-         newMatchedIds = [newMatchedIds[newMatchedIds.length - 1]];
-      }
-  
-      // 3. 兜底逻辑：如果什么都没匹配到，只默认选第 1 个，而不是前 2 个
-      if (newMatchedIds.length === 0 && newTracks.length > 0) {
-        newMatchedIds = [newTracks[0].id]; 
-        console.log("未匹配到偏好，默认选中第一个:", newMatchedIds);
-      }
+      // 兜底逻辑：如果新视频没匹配到偏好，但有字幕，侧边栏默认显示前两个
+      const finalTranscriptIds = nextTranscriptIds.length > 0 
+        ? nextTranscriptIds 
+        : newTracks.slice(0, 2).map(t => t.id);
   
       setState(prev => ({
         ...prev,
@@ -434,13 +430,13 @@ const App: React.FC = () => {
         currentTime: 0,
         isPlaying: true,
         tracks: newTracks,
-        videoTrackIds: newMatchedIds,
-        transcriptTrackIds: newMatchedIds, 
+        videoTrackIds: nextVideoIds,       // 独立更新
+        transcriptTrackIds: finalTranscriptIds, // 独立更新
       }));
     } finally {
       setIsProcessing(false);
     }
-  }, [state.videoTrackIds, state.tracks, state.srtPool]);
+  }, [state.srtPool]);
 
   const playNextVideo = useCallback(() => {
     const { currentVideo, playlist } = state;
@@ -511,12 +507,15 @@ const App: React.FC = () => {
   const handleTranscriptTrackToggle = (id: string) => {
     setState(p => {
       const isSelected = p.transcriptTrackIds.includes(id);
-      let newIds: string[];
-      if (isSelected) {
-        newIds = p.transcriptTrackIds.filter(i => i !== id);
-      } else {
-        newIds = [...p.transcriptTrackIds, id].slice(-2);
-      }
+      const newIds = isSelected 
+        ? p.transcriptTrackIds.filter(i => i !== id) 
+        : [...p.transcriptTrackIds, id].slice(-2);
+      
+      // 记录偏好：存储 Label 而不是 ID
+      preferredTranscriptLabelsRef.current = p.tracks
+        .filter(t => newIds.includes(t.id))
+        .map(t => t.label);
+  
       return { ...p, transcriptTrackIds: newIds };
     });
   };
@@ -591,7 +590,9 @@ const App: React.FC = () => {
                   tracks={state.tracks}
                   activeTrackIds={state.videoTrackIds}
                   onTrackChange={(ids) => {
-                    activeIdsRef.current = ids;
+                    preferredVideoLabelsRef.current = state.tracks
+                      .filter(t => ids.includes(t.id))
+                      .map(t => t.label);
                     setState(prev => ({ ...prev, videoTrackIds: ids }));
                   }}
                   playbackRate={playbackRate}
