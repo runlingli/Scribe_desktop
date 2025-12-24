@@ -8,6 +8,7 @@ pub struct MediaFile {
     pub relative_path: String,  // Path relative to root folder
     pub file_type: MediaType,
     pub duration: Option<f64>,
+    pub modified_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

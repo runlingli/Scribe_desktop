@@ -1,6 +1,7 @@
 use walkdir::WalkDir;
 use std::path::Path;
 use uuid::Uuid;
+use std::time::UNIX_EPOCH;
 use crate::media::types::{MediaFile, MediaType, ScanResult};
 
 pub fn scan_media_folder(folder_path: &str) -> Result<ScanResult, String> {
@@ -31,6 +32,12 @@ pub fn scan_media_folder(folder_path: &str) -> Result<ScanResult, String> {
             continue;
         }
 
+        let modified_at = entry.metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64);
+
         let extension = path.extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase());
@@ -54,6 +61,7 @@ pub fn scan_media_folder(folder_path: &str) -> Result<ScanResult, String> {
                     relative_path: format!("{}/{}", root_folder_name, relative_path),
                     file_type: MediaType::Video,
                     duration: None, // Will be populated later
+                    modified_at,
                 });
             }
             Some("srt") => {
@@ -67,6 +75,7 @@ pub fn scan_media_folder(folder_path: &str) -> Result<ScanResult, String> {
                     relative_path: format!("{}/{}", root_folder_name, relative_path),
                     file_type: MediaType::Subtitle,
                     duration: None,
+                    modified_at,
                 });
             }
             _ => {}

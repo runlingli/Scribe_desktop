@@ -7,6 +7,7 @@ export interface MediaFile {
   relative_path: string;
   file_type: 'video' | 'subtitle';
   duration?: number;
+  modified_at?: number;
 }
 
 export interface ScanResult {

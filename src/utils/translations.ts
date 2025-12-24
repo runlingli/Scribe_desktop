@@ -14,7 +14,6 @@ export const translations = {
     primary: "Primary",
     secondary: "Secondary",
     filenameSeparators: "Filename Separators",
-    add: "Add",
     suffixMapping: "Suffix Mapping",
     clearAll: "Clear All Data",
     searchTranscript: "Search transcript...",

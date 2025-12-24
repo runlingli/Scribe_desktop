@@ -21,6 +21,7 @@ export interface VideoFileEntry {
   streamUrl?: string;     // HTTP streaming URL from backend server
   relativePath: string;
   duration?: number;
+  modified_at?: number;
 }
 
 export interface ExplorerNode {
@@ -28,6 +29,7 @@ export interface ExplorerNode {
   type: 'folder' | 'file';
   children?: ExplorerNode[];
   video?: VideoFileEntry;
+  modified_at?: number;
   path: string;
 }
 

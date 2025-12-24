@@ -9,6 +9,7 @@ interface VideoPlayerProps {
   title: string;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
+  onEnded: () => void;
   currentTime: number;
   tracks: SubtitleTrack[];
   activeTrackIds: string[];
@@ -27,6 +28,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   title,
   onTimeUpdate, 
   onDurationChange, 
+  onEnded,
   currentTime,
   tracks,
   activeTrackIds,
@@ -85,6 +87,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     { label: t.huge, val: 1.5 }
   ];
 
+  useEffect(() => {
+    if (videoRef.current && url) {
+      
+      videoRef.current.load(); 
+      const playPromise = videoRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.log("Autoplay was prevented:", error);
+        });
+      }
+    }
+  }, [url]);
+
   return (
     <div 
       className="relative w-full h-full flex flex-col bg-black group/player overflow-hidden"
@@ -99,6 +115,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         crossOrigin="anonymous"
         onTimeUpdate={(e) => onTimeUpdate(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => onDurationChange(e.currentTarget.duration)}
+        onEnded={onEnded}
       />
       
       <div className={`absolute top-0 left-0 right-0 px-1 overflow-hidden bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 pointer-events-none flex justify-between items-center z-50 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>

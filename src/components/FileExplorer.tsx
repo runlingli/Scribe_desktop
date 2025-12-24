@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { FolderOpen, PlayCircle, FileVideo, ChevronRight, ChevronDown, Folder, SortAsc, Calendar } from 'lucide-react';
+import { FolderOpen, PlayCircle, FileVideo, ChevronRight, ChevronDown, SortAsc, Calendar } from 'lucide-react';
 import { VideoFileEntry, ExplorerNode, UILanguage } from '../types';
 import { formatTimeCompact } from '../utils/videoUtils';
 import { translations } from '../utils/translations';
@@ -15,6 +15,13 @@ interface FileExplorerProps {
 
 type SortBy = 'name' | 'date';
 
+const calculateTotalDuration = (node: ExplorerNode): number => {
+  if (node.type === 'file') {
+    return node.video?.duration || 0;
+  }
+  return (node.children || []).reduce((acc, child) => acc + calculateTotalDuration(child), 0);
+};
+
 const NodeItem: React.FC<{ 
   node: ExplorerNode; 
   depth: number; 
@@ -22,13 +29,15 @@ const NodeItem: React.FC<{
   onSelect: (video: VideoFileEntry) => void 
 }> = ({ node, depth, currentVideoId, onSelect }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // calculate total duration
+  const totalDuration = useMemo(() => calculateTotalDuration(node), [node]);
 
   if (node.type === 'folder') {
     return (
       <div className="select-none">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center gap-2 px-2 py-2 hover:bg-slate-800/40 rounded-lg transition-colors group"
+          className="w-full flex items-center gap-1 px-1 py-1 hover:bg-slate-800/40 rounded-lg transition-colors group"
           style={{ paddingLeft: `${depth * 1 + 0.5}rem` }}
         >
           {isOpen ? (
@@ -36,8 +45,14 @@ const NodeItem: React.FC<{
           ) : (
             <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
           )}
-          <Folder className={`w-4 h-4 shrink-0 ${isOpen ? 'text-blue-500' : 'text-slate-600'}`} />
           <span className="text-sm font-medium text-slate-400 group-hover:text-slate-200 truncate">{node.name}</span>
+
+          {totalDuration > 0 && (
+            <span className="text-[0.6rem] text-slate-600 font-mono bg-slate-800/50 px-1.5 py-0.5 rounded">
+              {formatTimeCompact(totalDuration)}
+            </span>
+          )}
+          
         </button>
         {isOpen && node.children && (
           <div className="mt-0.5 animate-in fade-in slide-in-from-left-1 duration-200">
@@ -80,44 +95,63 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ tree, currentVideoId, curre
   const [sortBy, setSortBy] = useState<SortBy>('name');
   const t = translations[uiLanguage];
 
-  const sortNodes = (nodes: ExplorerNode[]): ExplorerNode[] => {
-    return [...nodes].sort((a, b) => {
-      if (a.type === 'folder' && b.type === 'file') return -1;
-      if (a.type === 'file' && b.type === 'folder') return 1;
+  const allFilesTotalDuration = useMemo(() => {
+    return tree.reduce((acc, node) => acc + calculateTotalDuration(node), 0);
+  }, [tree]);
 
-      // Sort by name (date sorting not available without File object)
-      return a.name.localeCompare(b.name);
-    }).map(node => {
-      if (node.children) {
-        return { ...node, children: sortNodes(node.children) };
-      }
-      return node;
-    });
+  const sortNodes = (nodes: ExplorerNode[]): ExplorerNode[] => {
+    return [...nodes]
+      .sort((a, b) => {
+        if (sortBy === 'date') {
+          const timeA = a.type === 'file' ? (a.video?.modified_at || 0) : (a.modified_at || 0);
+          const timeB = b.type === 'file' ? (b.video?.modified_at || 0) : (b.modified_at || 0);
+          
+          if (timeB !== timeA) {
+            return timeB - timeA;
+          }
+        }
+        if (a.type === 'folder' && b.type === 'file') return -1;
+        if (a.type === 'file' && b.type === 'folder') return 1;
+  
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      })
+      .map((node) => {
+        if (node.children) {
+          return { ...node, children: sortNodes(node.children) };
+        }
+        return node;
+      });
   };
 
   const sortedTree = useMemo(() => sortNodes(tree), [tree, sortBy]);
 
   return (
     <div className="flex flex-col h-full bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden shadow-inner">
-      <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/30">
-        <div className="flex items-center gap-2 overflow-hidden flex-1">
-          <FolderOpen className="w-4 h-4 text-blue-500 shrink-0" />
+      <div className="p-2 border-b border-slate-800 flex items-center bg-slate-900/30">
+        
+        <FolderOpen className="w-4 h-4 text-blue-500 shrink-0" />
+
+        <div className="flex-1 min-w-0 px-2 flex flex-col justify-center">
           <h2 className="text-xs font-bold text-slate-300 uppercase tracking-widest truncate">
             {currentFolderName === 'No Folder Selected' ? t.noFolder : currentFolderName}
           </h2>
+          
+          {allFilesTotalDuration > 0 && (
+            <div className="text-[0.6rem] text-blue-400/60 font-mono flex gap-1 items-center whitespace-nowrap">
+              {formatTimeCompact(allFilesTotalDuration)}
+            </div>
+          )}
         </div>
-        
-        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+
+        <div className="flex items-center gap-1.5 shrink-0">
           <button 
             onClick={() => setSortBy('name')} 
-            title={t.sortByName}
             className={`p-1.5 rounded-md ${sortBy === 'name' ? 'bg-slate-800 text-blue-400' : 'text-slate-600 hover:text-slate-400'}`}
           >
             <SortAsc className="w-4 h-4" />
           </button>
           <button 
             onClick={() => setSortBy('date')} 
-            title={t.sortByDate}
             className={`p-1.5 rounded-md ${sortBy === 'date' ? 'bg-slate-800 text-blue-400' : 'text-slate-600 hover:text-slate-400'}`}
           >
             <Calendar className="w-4 h-4" />

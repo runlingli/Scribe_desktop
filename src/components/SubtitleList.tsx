@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback} from 'react';
 import { Search, Languages, Type, Eye } from 'lucide-react';
 import { SubtitleTrack, UILanguage } from '../types';
 import { translations } from '../utils/translations';
@@ -32,17 +32,50 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showOpacityMenu, setShowOpacityMenu] = useState(false);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const t = translations[uiLanguage];
 
   useEffect(() => {
-    if (activeRef.current && listRef.current) {
+    if (!isUserScrolling && activeRef.current && listRef.current) {
       activeRef.current.scrollIntoView({
         behavior: 'smooth',
         block: 'center'
       });
     }
-  }, [currentTime]);
+  }, [currentTime, isUserScrolling]);
+
+  // clear timeout to avoid memory leakage after uninstall
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
+  }, []);
+
+  const handleUserScroll = useCallback(() => {
+    setIsUserScrolling(true);
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsUserScrolling(false);
+    }, 2000);
+  }, []);
+
+  const handleLineClick = (startTime: number) => {
+    onSeek(startTime + 0.02);
+    setIsUserScrolling(false); // immediately jump
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+  };
+
+  useEffect(() => {
+    if (!isUserScrolling && activeRef.current && listRef.current) {
+      activeRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }, [currentTime, isUserScrolling]);
 
   const displayedTracks = activeTrackIds
     .map(id => tracks.find(track => track.id === id))
@@ -143,7 +176,10 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
         </div>
       </div>
 
-      <div ref={listRef} className="flex-1 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+      <div ref={listRef} 
+           className="flex-1 overflow-y-auto p-1.5 space-y-1 custom-scrollbar"
+           onWheel={handleUserScroll}
+           onTouchMove={handleUserScroll}>
         {displayedTracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-600 p-4 text-center opacity-40">
             <Languages className="w-10 h-10 mb-2" />
@@ -165,14 +201,14 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
               <button
                 key={line.id}
                 ref={isActive ? activeRef : null}
-                onClick={() => onSeek(line.startTime)}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-all border group relative ${
+                onClick={() => handleLineClick(line.startTime)}
+                className={`w-full text-left px-1 py-1 rounded-lg transition-all border group relative ${
                   isActive 
                   ? 'bg-blue-600/10 border-blue-500/20 shadow-sm' 
                   : 'hover:bg-slate-800/30 border-transparent'
                 }`}
               >
-                <div className="space-y-1">
+                <div>
                   <p 
                     className={`leading-tight transition-colors ${
                       isActive ? 'text-blue-200 font-medium' : 'text-slate-300 group-hover:text-slate-100'

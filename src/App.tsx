@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import {MessageSquare, AlertCircle, LayoutGrid, X, Settings, Plus, Trash2, FolderOpen, Loader2 } from 'lucide-react';
+import {MessageSquare, AlertCircle, LayoutGrid, X, Settings, Plus, Trash2, FolderOpen, Loader2} from 'lucide-react';
 import VideoPlayer from './components/VideoPlayer';
 import SubtitleList from './components/SubtitleList';
 import FileExplorer from './components/FileExplorer';
@@ -111,6 +111,7 @@ const App: React.FC = () => {
 
   const buildFolderTree = (videos: VideoFileEntry[]): ExplorerNode[] => {
     const root: ExplorerNode[] = [];
+    
     videos.forEach(video => {
       const parts = video.relativePath.split('/');
       const pathParts = parts.slice(1); 
@@ -126,9 +127,14 @@ const App: React.FC = () => {
             type: isFile ? 'file' : 'folder',
             path: parts.slice(0, index + 2).join('/'),
             children: isFile ? undefined : [],
-            video: isFile ? video : undefined
+            video: isFile ? video : undefined,
+            modified_at: isFile ? (video.modified_at || 0) : 0 
           };
           currentLevel.push(node);
+        } else {
+          if (!isFile && video.modified_at) {
+            node.modified_at = Math.max(node.modified_at || 0, video.modified_at);
+          }
         }
         if (node.children) currentLevel = node.children;
       });
@@ -224,33 +230,34 @@ const App: React.FC = () => {
 
       console.log('Registering videos for streaming...');
       // Register all videos for streaming and extract durations
-      const videoEntries: VideoFileEntry[] = await Promise.all(
-        scanResult.videos.map(async (video, index) => {
-          console.log(`Registering video ${index + 1}/${scanResult.videos.length}:`, video.name);
-          // Register video with streaming server
+      const videoEntries = await Promise.all(
+        scanResult.videos.map(async (video) => {
           const streamUrl = await registerVideoStream(video.path);
-          console.log('Stream URL:', streamUrl);
-
-          // Extract duration using browser fallback
-          let duration = video.duration;
-          if (!duration || duration === 0) {
-            console.log('Extracting duration from stream...');
-            duration = await getVideoDurationFromUrl(streamUrl);
-          }
-
+          console.log('Modified at ', video.modified_at);
           return {
             id: video.id,
             name: video.name,
             path: video.path,
             streamUrl,
             relativePath: video.relative_path,
-            duration,
+            duration: video.duration || 0, // store the value from the backend first
+            modified_at: video.modified_at || 0
           };
         })
       );
 
-      console.log('Building folder tree...');
       const tree = buildFolderTree(videoEntries);
+      // fix after initialize
+      setState(prev => ({ ...prev, playlist: videoEntries, folderTree: tree }));
+
+      for (const v of videoEntries) {
+        if (v.duration === 0) {
+          const realDuration = await getVideoDurationFromUrl(v.streamUrl);
+          v.duration = realDuration; 
+        }
+      }
+
+      console.log('Building folder tree...');
       const videoToPlay = findFirstVideoInTree(tree);
       let tracks: SubtitleTrack[] = [];
 
@@ -317,7 +324,7 @@ const App: React.FC = () => {
     });
   };
 
-  const handleVideoSelect = async (video: VideoFileEntry) => {
+  const handleVideoSelect = useCallback(async (video: VideoFileEntry) => {
     setIsProcessing(true);
     try {
       const tracks = await matchSubtitles(video, state.srtPool);
@@ -325,6 +332,7 @@ const App: React.FC = () => {
         ...prev, 
         currentVideo: video, 
         currentTime: 0, 
+        isPlaying: true,
         tracks,
         transcriptTrackIds: tracks.slice(0, 2).map(t => t.id),
         videoTrackIds: tracks.slice(0, 1).map(t => t.id),
@@ -333,7 +341,23 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [state.srtPool]);
+
+  const playNextVideo = useCallback(() => {
+    const { currentVideo, playlist } = state;
+    if (!currentVideo || playlist.length === 0) return;
+  
+    // find the index
+    const currentIndex = playlist.findIndex(v => v.id === currentVideo.id);
+    
+    // if it is not the last one, play the next video
+    if (currentIndex !== -1 && currentIndex < playlist.length - 1) {
+      const nextVideo = playlist[currentIndex + 1];
+      handleVideoSelect(nextVideo);
+    } else {
+      console.log("Reached the end of playlist");
+    }
+  }, [state.currentVideo, state.playlist]);
 
   const toggleLanguage = () => {
     setState(p => ({ ...p, uiLanguage: p.uiLanguage === 'en' ? 'zh' : 'en' }));
@@ -457,6 +481,7 @@ const App: React.FC = () => {
                   title={state.currentVideo.name}
                   onTimeUpdate={(t) => setState(p => ({ ...p, currentTime: t }))}
                   onDurationChange={(d) => setState(p => ({ ...p, duration: d }))}
+                  onEnded={playNextVideo}
                   currentTime={state.currentTime}
                   tracks={state.tracks}
                   activeTrackIds={state.videoTrackIds}
@@ -555,10 +580,10 @@ const App: React.FC = () => {
                               : 'bg-slate-950/20 border-transparent text-slate-500 hover:text-slate-300'
                           }`}
                          >
-                           <span className="flex items-center justify-between w-full">
+                           <span className="flex items-center justify-between w-full overflow-hidden">
                              {track.label}
                              {rank !== -1 && (
-                               <span className={`text-[0.6rem] px-1.5 py-0.5 rounded font-black uppercase ${rank === 0 ? 'bg-blue-500/50 text-white' : 'bg-slate-700/50 text-slate-300'}`}>
+                               <span className={`text-[0.6rem] px-1.5 py-0.5 rounded-xl font-black uppercase ${rank === 0 ? 'bg-blue-500/50 text-white' : 'bg-slate-700/50 text-slate-300'}`}>
                                  {rank === 0 ? t.primary : t.secondary}
                                </span>
                              )}
@@ -591,13 +616,13 @@ const App: React.FC = () => {
                        value={newSeparator}
                        onChange={(e) => setNewSeparator(e.target.value)}
                        placeholder="e.g. @"
-                       className="flex-1 bg-slate-950/50 border border-slate-800 rounded px-2 py-2 text-sm focus:outline-none focus:border-blue-500/50"
+                       className="min-w-0 bg-slate-950/50 border border-slate-800 rounded px-2 py-2 text-sm focus:outline-none focus:border-blue-500/50"
                      />
                      <button 
                        onClick={addSeparator}
-                       className="px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm transition-colors font-bold"
+                       className="px-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm transition-colors font-bold shrink-0"
                      >
-                       {t.add}
+                       <Plus className="w-5 h-5" />
                      </button>
                    </div>
                  </div>
