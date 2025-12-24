@@ -28,9 +28,16 @@ const NodeItem: React.FC<{
   currentVideoId?: string; 
   onSelect: (video: VideoFileEntry) => void 
 }> = ({ node, depth, currentVideoId, onSelect }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const isVideoInFolder = (n: ExplorerNode): boolean => {
+    if (n.type === 'file') return n.video?.id === currentVideoId;
+    return n.children?.some(child => isVideoInFolder(child)) || false;
+  };
+
+  const [isOpen, setIsOpen] = useState(() => isVideoInFolder(node));
   // calculate total duration
   const totalDuration = useMemo(() => calculateTotalDuration(node), [node]);
+
+
 
   if (node.type === 'folder') {
     return (
@@ -123,7 +130,10 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ tree, currentVideoId, curre
       });
   };
 
-  const sortedTree = useMemo(() => sortNodes(tree), [tree, sortBy]);
+  const sortedTree = useMemo(() => {
+    console.log("Sorting tree...");
+    return sortNodes(tree);
+  }, [tree, sortBy]);
 
   return (
     <div className="flex flex-col h-full bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden shadow-inner">

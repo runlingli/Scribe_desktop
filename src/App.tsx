@@ -336,7 +336,7 @@ const App: React.FC = () => {
         tracks,
         transcriptTrackIds: tracks.slice(0, 2).map(t => t.id),
         videoTrackIds: tracks.slice(0, 1).map(t => t.id),
-        sidebarMode: tracks.length > 0 ? 'transcript' : 'explorer'
+        // sidebarMode: tracks.length > 0 ? 'transcript' : 'explorer'
       }));
     } finally {
       setIsProcessing(false);
