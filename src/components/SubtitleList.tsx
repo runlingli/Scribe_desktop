@@ -37,16 +37,28 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
 
   const t = translations[uiLanguage];
 
-  useEffect(() => {
-    if (!isUserScrolling && activeRef.current && listRef.current) {
-      activeRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
-      });
-    }
-  }, [currentTime, isUserScrolling]);
+const lastActiveIdRef = useRef<string | null>(null);
 
-  // clear timeout to avoid memory leakage after uninstall
+ const handleLineClick = (line: any) => {
+  if (!line || typeof line.startTime !== 'number') return;
+
+  setIsUserScrolling(true);
+  lastActiveIdRef.current = line.id;
+  onSeek(line.startTime + 0.02);
+  const element = document.getElementById(`line-${line.id}`);
+  if (element) {
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+  }
+
+  if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+  scrollTimeoutRef.current = setTimeout(() => {
+    setIsUserScrolling(false);
+  }, 2000); 
+};
+
   useEffect(() => {
     return () => {
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -55,6 +67,7 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
 
   const handleUserScroll = useCallback(() => {
     setIsUserScrolling(true);
+    
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     
     scrollTimeoutRef.current = setTimeout(() => {
@@ -62,20 +75,6 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
     }, 2000);
   }, []);
 
-  const handleLineClick = (startTime: number) => {
-    onSeek(startTime + 0.02);
-    setIsUserScrolling(false); // immediately jump
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-  };
-
-  useEffect(() => {
-    if (!isUserScrolling && activeRef.current && listRef.current) {
-      activeRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
-      });
-    }
-  }, [currentTime, isUserScrolling]);
 
   const displayedTracks = activeTrackIds
     .map(id => tracks.find(track => track.id === id))
@@ -87,6 +86,25 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
   const filteredLines = primaryTrack?.lines.filter(l => 
     l.text.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
+
+  useEffect(() => {
+    const activeLine = primaryTrack?.lines.find(
+      line => currentTime >= line.startTime && currentTime <= line.endTime
+    );
+  
+    if (activeLine && activeLine.id !== lastActiveIdRef.current) {
+      lastActiveIdRef.current = activeLine.id; 
+  
+      if (!isUserScrolling && activeRef.current && listRef.current) {
+        requestAnimationFrame(() => {
+          activeRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+        });
+      }
+    }
+  }, [currentTime, isUserScrolling, primaryTrack]);
 
   const sizes = [
     { label: t.tiny, val: 0.9 },
@@ -103,6 +121,12 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
     { label: '40%', val: 0.4 },
     { label: '20%', val: 0.2 }
   ];
+
+  console.log('SubtitleList Render:', {
+    hasActiveRef: !!activeRef.current,
+    isUserScrolling,
+    currentTime
+  });
 
   return (
     <div className="bg-slate-900/50 rounded-xl border border-slate-800 flex flex-col h-full overflow-hidden shadow-inner">
@@ -178,6 +202,7 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
 
       <div ref={listRef} 
            className="flex-1 overflow-y-auto p-1.5 space-y-1 custom-scrollbar"
+           onScroll={handleUserScroll}
            onWheel={handleUserScroll}
            onTouchMove={handleUserScroll}>
         {displayedTracks.length === 0 ? (
@@ -200,8 +225,9 @@ const SubtitleList: React.FC<SubtitleListProps> = ({
             return (
               <button
                 key={line.id}
+                id={`line-${line.id}`}
                 ref={isActive ? activeRef : null}
-                onClick={() => handleLineClick(line.startTime)}
+                onClick={() => handleLineClick(line)}
                 className={`w-full text-left px-1 py-1 rounded-lg transition-all border group relative ${
                   isActive 
                   ? 'bg-blue-600/10 border-blue-500/20 shadow-sm' 

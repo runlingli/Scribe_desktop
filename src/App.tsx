@@ -1,7 +1,6 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {MessageSquare, AlertCircle, LayoutGrid, X, Settings, Plus, Trash2, FolderOpen, Loader2} from 'lucide-react';
-import VideoPlayer from './components/VideoPlayer';
+import VideoPlayer, { VideoPlayerHandle } from './components/VideoPlayer';
 import SubtitleList from './components/SubtitleList';
 import FileExplorer from './components/FileExplorer';
 import TitleBar from './components/TitleBar';
@@ -62,6 +61,7 @@ const App: React.FC = () => {
   const [separators, setSeparators] = useState<string[]>(['.', '_', '-']);
   const [newSeparator, setNewSeparator] = useState('');
   
+  
   const isResizing = useRef(false);
   const t = translations[state.uiLanguage];
 
@@ -69,6 +69,8 @@ const App: React.FC = () => {
 
   const preferredVideoLabelsRef = useRef<string[]>([]);
   const preferredTranscriptLabelsRef = useRef<string[]>([]);
+
+  const videoPlayerRef = useRef<VideoPlayerHandle>(null);
 
   useEffect(() => {
     // 20px is a solid base for desktop apps to make 'rem' comfortable
@@ -520,6 +522,19 @@ const App: React.FC = () => {
     });
   };
 
+  const handleManualSeek = useCallback((time: number) => {
+    console.log('Parent seeking to:', time);
+    
+    // 更新状态（驱动字幕高亮）
+    setState(p => ({ ...p, currentTime: time }));
+    
+    // 控制视频跳转（驱动视频画面）
+    if (videoPlayerRef.current) {
+      videoPlayerRef.current.seekTo(time);
+    }
+  }, []);
+
+  
   const startResizing = useCallback(() => {
     isResizing.current = true;
     document.addEventListener('mousemove', handleMouseMove);
@@ -578,6 +593,7 @@ const App: React.FC = () => {
                   key={state.currentVideo?.id}
                   url={state.currentVideo.streamUrl}
                   title={state.currentVideo.name}
+                  ref={videoPlayerRef}
                   onTimeUpdate={(time) => {
                     if (Math.floor(time) !== Math.floor(state.currentTime)) {
                       localStorage.setItem(LAST_TIME_KEY, time.toString());
@@ -660,7 +676,7 @@ const App: React.FC = () => {
                  currentTime={state.currentTime}
                  subtitleSize={transcriptSubtitleSize}
                  onSizeChange={setTranscriptSubtitleSize}
-                 onSeek={(time) => setState(p => ({ ...p, currentTime: time }))}
+                 onSeek={handleManualSeek}
                  uiLanguage={state.uiLanguage}
                  secondaryOpacity={secondaryOpacity}
                  onOpacityChange={setSecondaryOpacity}

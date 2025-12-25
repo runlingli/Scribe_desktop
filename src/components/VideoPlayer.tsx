@@ -1,7 +1,11 @@
-import React, { useRef, useEffect, useState } from 'react';
 import { SubtitleTrack, UILanguage } from '../types';
 import { Captions, X, Type } from 'lucide-react';
 import { translations } from '../utils/translations';
+import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+
+export interface VideoPlayerHandle {
+  seekTo: (time: number) => void;
+}
 
 interface VideoPlayerProps {
   url: string;
@@ -22,24 +26,27 @@ interface VideoPlayerProps {
   secondaryOpacity: number;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
-  url, 
-  title,
-  onTimeUpdate, 
-  onDurationChange, 
-  onEnded,
-  currentTime,
-  tracks,
-  activeTrackIds,
-  onTrackChange,
-  playbackRate,
-  subtitleSize,
-  onSpeedChange,
-  onSizeChange,
-  onClose,
-  uiLanguage,
-  secondaryOpacity
-}) => {
+const VideoPlayerComponent = (
+  {
+    url,
+    title,
+    onTimeUpdate,
+    onDurationChange,
+    onEnded,
+    currentTime,
+    tracks,
+    activeTrackIds,
+    onTrackChange,
+    playbackRate,
+    subtitleSize,
+    onSpeedChange,
+    onSizeChange,
+    onClose,
+    uiLanguage,
+    secondaryOpacity,
+  }: VideoPlayerProps, // 显式声明 Props 类型
+  ref: React.ForwardedRef<VideoPlayerHandle> // 显式声明 Ref 类型
+) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
@@ -47,6 +54,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showTrackMenu, setShowTrackMenu] = useState(false);
 
   const t = translations[uiLanguage];
+
+  useImperativeHandle(ref, () => ({
+    seekTo: (time: number) => {
+      if (videoRef.current) {
+        console.log('Video Element Seeking to:', time);
+        videoRef.current.currentTime = time;
+      }
+    }
+  }));
 
   useEffect(() => {
     const video = videoRef.current;
@@ -239,5 +255,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     </div>
   );
 };
+
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(VideoPlayerComponent);
 
 export default VideoPlayer;
