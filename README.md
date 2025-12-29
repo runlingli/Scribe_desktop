@@ -8,6 +8,8 @@ A high-performance local video player with offline SRT subtitle support, bilingu
 
 ![Video Playback](resource/play.png)
 
+![Settings](resource/settings.png)
+
 ## Download
 
 📦 **[Download Scribe Desktop](https://github.com/runlingli/Scribe_desktop_video_player/releases/)**
@@ -55,6 +57,7 @@ You can customize separators and suffix mappings in the Settings panel.
 ---
 
 *Scribe Desktop*
-Assited by [Google AI Studio](https://aistudio.google.com/) and [Claude CLI](https://platform.claude.com/)
+
+Assisted by [Google AI Studio](https://aistudio.google.com/) and [Claude CLI](https://platform.claude.com/)
 
 
